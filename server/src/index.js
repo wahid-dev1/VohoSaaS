@@ -5,12 +5,15 @@ const helmet = require('helmet');
 const cors = require('cors');
 const morgan = require('morgan');
 const rateLimit = require('express-rate-limit');
+const cfg = require('./config');
 const { sequelize } = require('./db/models');
 const { tenantResolver } = require('./middleware/tenantResolver');
 
 const authRoutes = require('./routes/auth');
 const tenantRoutes = require('./routes/tenants');
-
+const adminRoutes = require('./routes/admin');
+const callsRoutes = require('./routes/calls');
+const metricsRoutes = require('./routes/metrics');
 const PORT = process.env.PORT || 4000;
 const CORS_ORIGIN = process.env.CORS_ORIGIN || 'http://localhost';
 
@@ -19,17 +22,18 @@ async function start() {
 
   const app = express();
   app.use(helmet());
+
   app.use(cors({
   origin: (origin, cb) => {
-    if (!origin) return cb(null, true); // non-browser tools
-    // allow base domain and any subdomain of it
-    const ok = cfg.corsOrigins.includes(origin) ||
-               (cfg.baseDomain && origin.endsWith(`.${cfg.baseDomain}`)) ||
-               (cfg.baseDomain && origin === `http://${cfg.baseDomain}`) ||
-               (cfg.baseDomain && origin === `https://${cfg.baseDomain}`);
-    cb(ok ? null : new Error('Not allowed by CORS'), ok);
+    if (!origin) return cb(null, true); // allow non-browser clients
+
+    const ok =
+      cfg.corsOrigins.includes(origin) ||
+      (cfg.baseDomain && origin.match(new RegExp(`^https?://([a-z0-9-]+\\.)?${cfg.baseDomain}(:\\d+)?$`)));
+
+    cb(ok ? null : new Error("Not allowed by CORS: " + origin), ok);
   },
-  credentials: true
+  credentials: true,
 }));
   app.use(express.json());
   app.use(morgan('dev'));
@@ -48,7 +52,9 @@ async function start() {
   // Routes
   app.use('/api/tenants', tenantRoutes);
   app.use('/api/auth', authRoutes);
-
+  app.use('/api/admin', adminRoutes);
+  app.use('/api/calls', callsRoutes);
+  app.use('/api/metrics', metricsRoutes);
   // Error handler
   app.use((err, _req, res, _next) => {
     console.error(err);

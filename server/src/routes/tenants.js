@@ -1,15 +1,15 @@
-// server/src/routes/tenants.js
 const express = require('express');
 const bcrypt = require('bcryptjs');
-const { Tenant, User } = require('../db/models');
+const { Tenant, User, AuditLog } = require('../db/models');
 const { signToken } = require('../middleware/auth');
+const { getTenantSlugFromHost } = require('../utils/tenantHost');
 
 const r = express.Router();
 
 /**
  * POST /api/tenants/signup
  * Body: { name, slug, email, password, logoUrl?, primaryColor? }
- * Creates a tenant + initial admin user, returns JWT.
+ * Creates a tenant and its first admin user.
  */
 r.post('/signup', async (req, res, next) => {
   try {
@@ -18,22 +18,26 @@ r.post('/signup', async (req, res, next) => {
       return res.status(400).json({ error: 'Missing fields (name, slug, email, password)' });
     }
 
-    const existing = await Tenant.findOne({ where: { slug: String(slug).toLowerCase() } });
-    if (existing) return res.status(409).json({ error: 'Slug already taken' });
+    const normalized = String(slug).toLowerCase();
+    const exists = await Tenant.findOne({ where: { slug: normalized } });
+    if (exists) return res.status(409).json({ error: 'Slug already taken' });
 
-    const tenant = await Tenant.create({
-      name,
-      slug: String(slug).toLowerCase(),
-      logoUrl,
-      primaryColor
-    });
-
+    const tenant = await Tenant.create({ name, slug: normalized, logoUrl, primaryColor });
     const passwordHash = await bcrypt.hash(password, 12);
+
     const user = await User.create({
       email: String(email).toLowerCase(),
       passwordHash,
       role: 'admin',
       tenantId: tenant.id
+    });
+
+    await AuditLog.create({
+      tenantId: tenant.id,
+      userId: user.id,
+      action: 'tenant.signup',
+      ip: req.ip,
+      userAgent: req.headers['user-agent']
     });
 
     const token = signToken(user, tenant);
@@ -42,39 +46,36 @@ r.post('/signup', async (req, res, next) => {
       user: { id: user.id, email: user.email, role: user.role },
       tenant: { id: tenant.id, slug: tenant.slug, name: tenant.name }
     });
-  } catch (err) {
-    next(err);
-  }
+  } catch (err) { next(err); }
 });
+
+/**
+ * GET /api/tenants/resolve
+ * Returns tenant from Host, header, or ?slug.
+ */
 r.get('/resolve', async (req, res, next) => {
   try {
     const domain = req.query.domain || req.headers.host;
     const headerSlug = req.header('x-tenant');
     const qSlug = req.query.slug;
-
     const slug = (qSlug || headerSlug || getTenantSlugFromHost(domain) || '').toLowerCase();
-    if (!slug) return res.status(400).json({ ok: false, error: 'No tenant slug in host or params' });
+    if (!slug) return res.status(400).json({ ok: false, error: 'No tenant slug' });
 
     const tenant = await Tenant.findOne({ where: { slug } });
-    return res.json({
-      ok: true,
-      slug,
-      found: !!tenant,
-      tenant: tenant ? { id: tenant.id, name: tenant.name } : null
-    });
-  } catch (err) { next(err); }
+    res.json({ ok: true, slug, found: !!tenant });
+  } catch (e) { next(e); }
 });
 
-// GET /api/tenants/branding
-// Returns minimal branding props for a tenant (slug from middleware/header/query)
+/**
+ * GET /api/tenants/branding
+ * Returns logo/color for a tenant.
+ */
 r.get('/branding', async (req, res, next) => {
   try {
-    const slug =
-      (req.tenant && req.tenant.slug) ||
-      (req.header('x-tenant') || req.query.slug || getTenantSlugFromHost(req.query.domain || req.headers.host));
-
+    const slug = (req.header('x-tenant') || req.query.slug || '').toLowerCase();
     if (!slug) return res.status(400).json({ error: 'Missing tenant slug' });
-    const tenant = await Tenant.findOne({ where: { slug: String(slug).toLowerCase() } });
+
+    const tenant = await Tenant.findOne({ where: { slug } });
     if (!tenant) return res.status(404).json({ error: 'Tenant not found' });
 
     res.json({
@@ -85,4 +86,19 @@ r.get('/branding', async (req, res, next) => {
     });
   } catch (e) { next(e); }
 });
+
+/**
+ * GET /api/tenants/:slug
+ * Fetch tenant by slug
+ */
+r.get('/:slug', async (req, res, next) => {
+  try {
+    const slug = String(req.params.slug).toLowerCase();
+    const tenant = await Tenant.findOne({ where: { slug } });
+    if (!tenant) return res.status(404).json({ error: 'Tenant not found' });
+
+    res.json({ id: tenant.id, slug: tenant.slug, name: tenant.name });
+  } catch (e) { next(e); }
+});
+
 module.exports = r;
