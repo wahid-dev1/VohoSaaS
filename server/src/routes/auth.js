@@ -28,7 +28,7 @@ r.post('/login', loginLimiter, async (req, res, next) => {
     const tenant = await Tenant.findOne({ where: { slug: tenantSlug } });
     if (!tenant) return res.status(404).json({ error: 'Tenant not found' });
 
-    const user = await User.findOne({ where: { email: String(email).toLowerCase(), tenantId: tenant.id } });
+    const user = await User.findOne({ where: { email: String(email).toLowerCase(), tenantId: tenant?.id } });
     if (!user) return res.status(401).json({ error: 'Invalid credentials' });
 
     const ok = await bcrypt.compare(password, user.passwordHash);
