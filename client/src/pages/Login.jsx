@@ -1,68 +1,50 @@
-// src/pages/Login.jsx
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
 
 function Login() {
+  const { login } = useAuth();
+  const navigate = useNavigate();
   const [form, setForm] = useState({ slug: "", email: "", password: "" });
   const [message, setMessage] = useState("");
 
-  const handleChange = (e) => {
-    setForm({ ...form, [e.target.name]: e.target.value });
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+
+    const data = await login(form.slug, form.email, form.password);
+
+    if (data.token) {
+      setMessage("✅ Login successful, redirecting...");
+      // Redirect to dashboard on the same tenant subdomain
+      navigate("/dashboard");
+    } else {
+      setMessage("❌ " + (data.error || "Login failed"));
+    }
   };
 
-  const handleSubmit = async (e) => {
-  e.preventDefault();
-
-  try {
-    const res = await fetch("http://localhost:4000/api/auth/login", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(form),
-    });
-
-    const data = await res.json();
-
-    if (res.ok && data.token) {
-      localStorage.setItem("token", data.token);   // ✅ Save token
-      setMessage("✅ Login successful. Redirecting...");
-      const slug = form.slug;  // e.g. "acme"
-      window.location.href = `http://${slug}.lvh.me:5173/dashboard`;
-         // ✅ Redirect to dashboard
-    } else {
-      setMessage("❌ Error: " + (data.message || res.status));
-    }
-  } catch (err) {
-    setMessage("❌ Network error");
-  }
-};
-
   return (
-    <div>
-      <h1>Login</h1>
-      <form onSubmit={handleSubmit}>
-        <input
-          name="slug"
-          placeholder="Tenant Slug"
-          value={form.slug}
-          onChange={handleChange}
-        />
-        <input
-          name="email"
-          placeholder="Email"
-          type="email"
-          value={form.email}
-          onChange={handleChange}
-        />
-        <input
-          name="password"
-          placeholder="Password"
-          type="password"
-          value={form.password}
-          onChange={handleChange}
-        />
-        <button type="submit">Login</button>
-      </form>
+    <form onSubmit={handleSubmit}>
+      <input
+        type="text"
+        placeholder="Tenant Slug"
+        value={form.slug}
+        onChange={(e) => setForm({ ...form, slug: e.target.value })}
+      />
+      <input
+        type="email"
+        placeholder="Email"
+        value={form.email}
+        onChange={(e) => setForm({ ...form, email: e.target.value })}
+      />
+      <input
+        type="password"
+        placeholder="Password"
+        value={form.password}
+        onChange={(e) => setForm({ ...form, password: e.target.value })}
+      />
+      <button type="submit">Login</button>
       <p>{message}</p>
-    </div>
+    </form>
   );
 }
 
