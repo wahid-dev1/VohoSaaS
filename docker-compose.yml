@@ -1,12 +1,22 @@
+
 services:
+  traefik:
+    image: traefik:v3.1
+    command:
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+      - --entrypoints.web.address=:80
+    ports:
+      - "80:80"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+
   db:
     image: postgres:16
     environment:
       POSTGRES_DB: voho_saas
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
-    ports:
-      - "5432:5432"
     volumes:
       - db_data:/var/lib/postgresql/data
       - ./docker/pg/init:/docker-entrypoint-initdb.d
@@ -15,6 +25,32 @@ services:
       interval: 5s
       timeout: 5s
       retries: 15
+
+  api:
+    # >>> THIS is what was missing <<<
+    build:
+      context: ./server         # folder that contains your Dockerfile
+      dockerfile: Dockerfile    # file name (defaults to "Dockerfile")
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgres://postgres:postgres@db:5432/voho_saas
+      JWT_SECRET: change-me
+      CORS_ORIGIN: http://lvh.me,http://localhost
+      ULTRAVOX_API_URL: https://api.ultravox.ai
+      ULTRAVOX_API_KEY: dummy
+      ULTRAVOX_MOCK: "true"
+      BASE_DOMAIN: lvh.me
+    depends_on:
+      db:
+        condition: service_healthy
+    # Optional host port (useful for debugging without Traefik)
+    ports:
+      - "4000:4000"
+    # Route *lvh.me* and any subdomain to API via Traefik on :80
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.api.rule=Host(`lvh.me`) || HostRegexp(`{tenant:.+}.lvh.me`)
+      - traefik.http.services.api.loadbalancer.server.port=4000
 
 volumes:
   db_data:

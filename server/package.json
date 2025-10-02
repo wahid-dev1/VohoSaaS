@@ -4,14 +4,16 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
     "start": "node src/index.js",
     "dev": "nodemon src/index.js",
+    "test": "cross-env NODE_ENV=test jest --runInBand",
     "sequelize": "sequelize",
     "db:migrate": "sequelize db:migrate",
     "db:migrate:undo": "sequelize db:migrate:undo"
   },
   "dependencies": {
+    "axios": "^1.12.2",
+    "bcrypt": "^6.0.0",
     "bcryptjs": "^3.0.2",
     "cors": "^2.8.5",
     "dotenv": "^17.2.3",
@@ -25,7 +27,11 @@
     "sequelize": "^6.37.7"
   },
   "devDependencies": {
-    "sequelize-cli": "^6.6.3"
+    "cross-env": "^10.1.0",
+    "jest": "^30.2.0",
+    "sequelize-cli": "^6.6.3",
+    "sqlite3": "^5.1.7",
+    "supertest": "^7.1.4"
   },
   "keywords": [],
   "author": "",
