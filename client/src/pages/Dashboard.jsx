@@ -9,15 +9,18 @@ function Dashboard() {
   useEffect(() => {
     const token = localStorage.getItem("token");
     if (!token) {
-      navigate("/login"); // redirect if not logged in
+        navigate("/login"); // redirect if not logged in
       return;
     }
 
     async function fetchData() {
       try {
-        const res = await fetch("http://localhost:4000/api/metrics", {
-          headers: { Authorization: `Bearer ${token}` },
-        });
+        const res = await fetch(
+          `${window.location.protocol}//${window.location.hostname}:4000/api/metrics`,
+          {
+            headers: { Authorization: `Bearer ${token}` },
+          }
+        );
 
         if (!res.ok) throw new Error("Unauthorized");
 
